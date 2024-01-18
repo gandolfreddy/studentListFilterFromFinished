@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         完課學生資料過濾器
+// @name         完課學生資料過濾器（修改中）
 // @namespace    http://tampermonkey.net/
 // @version      1.0
 // @source       https://raw.githubusercontent.com/gandolfreddy/studentListFilterFromFinished/main/src/studentListFilterFromFinished.js
@@ -17,10 +17,10 @@
     GM_addStyle(`
         .floating-message-window-shrinked {
             position: fixed;
-            top: 50px;
+            top: 300px;
             right: 20px;
             z-index: 1000;
-            background-color: rgb(52,196,168, 0.8);
+            background-color: rgb(186,37,100, 0.8);
             color: #fff;
             font-weight: bold;
             font-size: 14px;
@@ -36,7 +36,7 @@
             align-items: center;
         }
         .floating-message-window-shrinked:hover {
-            background-color: rgb(52,196,168, 0.6);
+            background-color: rgb(186,37,100, 0.6);
         }
         .floating-message-window-extended {
             font-family: "consolas";
@@ -47,7 +47,7 @@
             background-color: #fff;
             color: #000;
             width: 650px;
-            height: 600px;
+            height: 700px;
             padding: 10px 20px 30px 20px;
             border-radius: 8px;
             border: 2px solid rgb(0, 0, 0, 0.5);
@@ -92,11 +92,8 @@
         #studentList::-webkit-scrollbar-thumb:hover {
             background: rgb(52,196,168, 0.4);
         }
-        .dragging {
-            cursor: grabbing;
-        }
         #inputURL {
-            height: 250px;
+            height: 350px;
         }
     `);
 
@@ -109,15 +106,18 @@
 
     // TITLEHINT 用來顯示功能提示
     const TITLEHINT = {
-        updateRawData: "更新學生內部訊息資料（內部訊息有更動再執行即可）",
-        currentData: "顯示目前抓取的內部訊息",
+        updateRawData: "更新學生名單（名單有更動再執行即可）",
+        currentData: "顯示目前抓取的名單",
     }
+
+    // 設定根連結
+    const ROOTLINK = "https://corp.orangeapple.co";
 
     // studentListLogging 用來記錄更新時的狀態
     let studentListLogging = '';
 
     // 從瀏覽器的 localStorage 取得資料
-    let allMsgsInfo = JSON.parse(localStorage.getItem("allMsgsInfo")) || {
+    let allFinishedInfo = JSON.parse(localStorage.getItem("allFinishedInfo")) || {
         classroomLinks: [],
         rawData: []
     };
@@ -143,7 +143,7 @@
         // 顯示抓取進度
         studentListLogging += `
         <div class="alert alert-warning" role="alert">
-            開始抓取學生內部訊息
+            開始抓取完課學生名單
         </div>
         `;
         if (isExtended) {
@@ -159,58 +159,62 @@
             let classroomName = body.children[0].children[0].children[1].children[0].children[2].nextSibling.data.replace(' > ', '');
             let classroomURL = link;
 
+            if (!classroomURL.includes('dt')) {
+                continue;
+            }
+
             // 顯示抓取進度
             studentListLogging += `
             <div class="alert alert-warning" role="alert">
-                正在抓取<a href='${classroomURL}' target="_blank">${classroomName}</a>學生內部訊息
+                正在抓取<a href='${classroomURL}' target="_blank">${classroomName}</a>完課學生名單
             </div>
             `;
             if (isExtended) {
                 document.querySelector("#studentList").innerHTML = studentListLogging + SPINNER;
             }
 
-            // 進入「課堂紀錄」頁面
-            if (classroomURL.includes('dt')) {
-                res = await fetch(`${link}/lesson_reports`).then(res => res.text());
-                currentPageDOM = new DOMParser().parseFromString(res, 'text/html');
-            }
-            let table = null;
-            table = currentPageDOM.querySelector("table.table-text-center.table.table-bordered");
-            if (classroomURL.includes('stages')) {
-                table = currentPageDOM.querySelector("table.table.table-bordered.js-freeze");
-            }
-            let students = [];
-            for (let tr of table.children[1].children) {
-                let studentName = tr.children[0].children[0].innerText;
-                let forInternalMsg = tr.children[0].querySelector("a.edit-admission-comment.admission-comment.me-1").children[1].innerText.trim();
-                let forTeacherMsg = tr.children[0].querySelector("a.edit-admission-teacher-comment.admission-comment.me-1").children[1].innerText.trim();
-                students.push({
-                    studentName: studentName,
-                    forInternalMsg: forInternalMsg,
-                    forTeacherMsg: forTeacherMsg,
-                });
+            // 進入「完課學生」頁面
+            let div = body.querySelector('div#finished-dt-admissions.tab-pane.fade');
+            let currentLink = ROOTLINK + div.firstChild.attributes.src.value;
+            res = await fetch(currentLink).then(res => res.text());
+            currentPageDOM = new DOMParser().parseFromString(res, 'text/html');
+
+            let tbody = currentPageDOM.querySelector('tbody');
+            let trs = tbody.querySelectorAll('tr');
+            let studentsObj = {};
+            for (let i = trs.length - 1; i > 0; i--) {
+                let tds = trs[i].querySelectorAll('td');
+                if (!(tds[0].innerText in studentsObj)) {
+                    studentsObj[tds[0].innerText] = {
+                        userPageURL: tds[0].children[0].href,
+                        grade: tds[1].innerText,
+                        parentName: tds[3].innerText,
+                        parentPageURL: tds[3].children[0].href,
+                        course: tds[5].innerText,
+                    }
+                }
             }
 
             // 如果 rawData 中已有此班級的資料，則更新資料，否則新增資料
             let isClassroomExist = false;
-            for (let classroom of allMsgsInfo.rawData) {
+            for (let classroom of allFinishedInfo.rawData) {
                 if (classroom.classroomURL === classroomURL) {
                     classroom.classroomName = classroomName;
-                    classroom.students = students;
+                    classroom.students = studentsObj;
                     isClassroomExist = true;
                     break;
                 }
             }
             if (!isClassroomExist) {
-                allMsgsInfo.rawData.push({
+                allFinishedInfo.rawData.push({
                     classroomName: classroomName,
                     classroomURL: classroomURL,
-                    students: students,
+                    students: studentsObj,
                 });
             }
         }
         // 儲存至瀏覽器的 localStorage
-        localStorage.setItem("allMsgsInfo", JSON.stringify(allMsgsInfo));
+        localStorage.setItem("allFinishedInfo", JSON.stringify(allFinishedInfo));
 
         // 將不允許的操作還原
         isUpdating = false;
@@ -226,14 +230,14 @@
         document.querySelector("#downloadData").disabled = false;
 
         // 顯示目前抓取的內部訊息
-        showStudentList(allMsgsInfo.rawData);
+        showStudentList(allFinishedInfo.rawData);
     }
 
-    // 學生內部訊息顯示函式
+    // 學生名單顯示函式
     function showStudentList(chosenStudentList) {
         /* 
-        學生內部訊息顯示
-        功能：顯示對應的學生內部訊息。
+        學生名單顯示
+        功能：顯示對應的學生名單。
         */
         // 將 #studentList 的畫面捲動至最上方
         document.querySelector("#studentList").scrollTop = 0;
@@ -247,27 +251,42 @@
             return;
         }
         for (let classroom of chosenStudentList) {
-            for (let student of classroom.students) {
-                if (student.forInternalMsg === '' && student.forTeacherMsg === '') continue;
+            for (let [studentName, tr] of Object.entries(classroom.students)) {
                 document.querySelector("#studentList").innerHTML += `
                 <div class="card">
                     <div class="card-header text-bg-primary">
                         <h4 class="card-title"><a href='${classroom.classroomURL}' target="_blank">${classroom.classroomName}</a></h4>
                     </div>
                     <div class="card-body" style="width: 100%">
-                        <h4 class="card-title"><span class="badge bg-warning">${student.studentName}</span></h4>
-                        ${(student.forInternalMsg !== '') ? `
-                        <p class="card-text">
-                            <h5 class="card-title"><span class="badge bg-danger">給內部訊息</span></h5>
-                            ${student.forInternalMsg}
-                        </p>
-                        ` : ''}
-                        ${(student.forTeacherMsg !== '') ? `
-                        <p class="card-text">
-                            <h5 class="card-title"><span class="badge bg-success">給老師訊息</span></h5>
-                            ${student.forTeacherMsg}
-                        </p>
-                        ` : ''}
+                        <h4 class="card-title"><span class="badge bg-warning">${studentName}</span></h4>
+                        <div class="card-text">
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="card-text">
+                                        <div class="row">
+                                            <div class="col-6">學生頁面</div>
+                                            <div class="col-6"><a href='${tr.userPageURL}' target="_blank">${tr.userPageURL}</a></div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-6">年級</div>
+                                            <div class="col-6">${tr.grade}</div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-6">家長姓名</div>
+                                            <div class="col-6">${tr.parentName}</div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-6">家長頁面</div>
+                                            <div class="col-6"><a href='${tr.parentPageURL}' target="_blank">${tr.parentPageURL}</a></div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-6">課程</div>
+                                            <div class="col-6">${tr.course}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 `;
@@ -283,12 +302,11 @@
         功能： 
         1. 縮圖為圓圈，內帶有 KH 字樣。
         2. 點擊後，會顯示展開一個小視窗，內容為取得的學生名單內容。
-        3. 縮小後可任意拖動至畫面任何位置，重新整理畫面後，預設位置於畫面內右上角。
         */
         let floatingMessageWindow = document.createElement("div");
         floatingMessageWindow.classList.add("floating-message-window-shrinked");
-        floatingMessageWindow.innerHTML = "MSG";
-        floatingMessageWindow.title = "點擊展開小視窗\n按住 CTRL + 滑鼠左鍵，便可以將懸浮訊息小視窗任意移動到目前視窗的各位置";
+        floatingMessageWindow.innerHTML = "KH";
+        floatingMessageWindow.title = "點擊展開小視窗";
         document.body.appendChild(floatingMessageWindow);
         return floatingMessageWindow;
     }
@@ -298,7 +316,7 @@
         /* 
         懸浮訊息小視窗 
         功能： 
-        1. 點選小視窗右上角的「最小化」按鈕，可以縮小小視窗。
+        1. 點選小視窗右上角的「X」按鈕，可以縮小小視窗。
         */
         let floatingMessageWindow = document.querySelector(".floating-message-window-shrinked");
         if (!floatingMessageWindow && isExtended) return;
@@ -314,13 +332,13 @@
         floatingMessageWindow.title = "";
         floatingMessageWindow.innerHTML = `
         <div class="d-flex justify-content-between align-items-center my-2" style="width: 100%;">
-            <div id="floating-message-window-title">各班級學生內部訊息</div>
+            <div id="floating-message-window-title">各班級完課學生名單</div>
             <button id="minimize-btn" type="button" class="btn-close" aria-label="Close"></button>
         </div>
         <div class="d-flex justify-content-between align-items-center pt-2 pb-3" style="width: 100%;">
             <div>
-                <button id="updateRawData" class='btn btn-outline-dark mr-1' title="${TITLEHINT.updateRawData}">更新原始資料</button>
-                <button id="currentData" class='btn btn-success' title="${TITLEHINT.currentData}">顯示目前抓取的內部訊息</button>
+                <button id="updateRawData" class='btn btn-outline-dark mr-1' title="${TITLEHINT.updateRawData}">${TITLEHINT.updateRawData}</button>
+                <button id="currentData" class='btn btn-success' title="${TITLEHINT.currentData}">${TITLEHINT.currentData}</button>
             </div>
             <button id="downloadData" class='btn btn-outline-dark' title="下載目前選擇的學生資料"><i class="fa-solid fa-download"></i></button>
         </div>
@@ -337,28 +355,28 @@
 
         // 顯示目前抓取的內部訊息按鈕點擊事件
         document.querySelector("#currentData")
-            .addEventListener("click", showStudentList.bind(null, allMsgsInfo.rawData), false);
+            .addEventListener("click", showStudentList.bind(null, allFinishedInfo.rawData), false);
 
         // 下載資料按鈕點擊事件
         document.querySelector("#downloadData")
             .addEventListener("click", () => {
-                let chosenStudentList = allMsgsInfo.rawData, fileName = 'studentInternalMsg';
+                let chosenStudentList = allFinishedInfo.rawData, fileName = 'FinishedStudentList';
                 let code = '';
-                for (let classroom of chosenStudentList) {
-                    code += `${classroom.classroomName} - ${classroom.classroomURL} \n`;
-                    for (let student of classroom.students) {
-                        if (student.forInternalMsg === '' && student.forTeacherMsg === '') continue;
-                        code += `\t${student.studentName} `;
-                        if (student.forInternalMsg !== '') {
-                            code += ` - 內部訊息：「${student.forInternalMsg}」`;
-                        }
-                        if (student.forTeacherMsg !== '') {
-                            code += ` - 給老師訊息：「${student.forTeacherMsg}」`;
-                        }
-                        code += '\n';
-                    }
-                    code += '\n';
-                }
+                // for (let classroom of chosenStudentList) {
+                //     code += `${classroom.classroomName} - ${classroom.classroomURL} \n`;
+                //     for (let student of classroom.students) {
+                //         if (student.forInternalMsg === '' && student.forTeacherMsg === '') continue;
+                //         code += `\t${student.studentName} `;
+                //         if (student.forInternalMsg !== '') {
+                //             code += ` - 內部訊息：「${student.forInternalMsg}」`;
+                //         }
+                //         if (student.forTeacherMsg !== '') {
+                //             code += ` - 給老師訊息：「${student.forTeacherMsg}」`;
+                //         }
+                //         code += '\n';
+                //     }
+                //     code += '\n';
+                // }
                 downloadSourceCode(code, `${fileName}_內部訊息_${new Date().toLocaleDateString()}.txt`);
             });
 
@@ -373,7 +391,7 @@
         }
 
         // 顯示目前抓取的內部訊息
-        showStudentList(allMsgsInfo.rawData);
+        showStudentList(allFinishedInfo.rawData);
     }
 
     // 關閉懸浮訊息小視窗的函式
@@ -391,8 +409,8 @@
         floatingMessageWindow.style.left = preCircleLeft + floatingMessageWindowRect.width - 50 + 'px';
         floatingMessageWindow.classList.remove("floating-message-window-extended");
         floatingMessageWindow.classList.add("floating-message-window-shrinked");
-        floatingMessageWindow.innerHTML = "MSG";
-        floatingMessageWindow.title = "點擊展開小視窗\n按住 CTRL + 滑鼠左鍵，便可以將懸浮訊息小視窗任意移動到目前視窗的各位置";
+        floatingMessageWindow.innerHTML = "KH";
+        floatingMessageWindow.title = "點擊展開小視窗";
         floatingMessageWindowRect = floatingMessageWindow.getBoundingClientRect();
         preCircleLeft = floatingMessageWindowRect.left;
         preCircleTop = floatingMessageWindowRect.top;
@@ -422,13 +440,13 @@
         </div>
             `;
         let inputURLArea = document.querySelector("#inputURL");
-        inputURLArea.value = allMsgsInfo.classroomLinks.length !== 0 ? allMsgsInfo.classroomLinks.join("\n") : '';
+        inputURLArea.value = allFinishedInfo.classroomLinks.length !== 0 ? allFinishedInfo.classroomLinks.join("\n") : '';
         document.querySelector("#updateURL")
             .addEventListener("click", async () => {
                 let inputURL = document.querySelector("#inputURL").value;
                 let classroomLinks = inputURL.split("\n");
-                allMsgsInfo.classroomLinks = classroomLinks;
-                localStorage.setItem("allMsgsInfo", JSON.stringify(allMsgsInfo));
+                allFinishedInfo.classroomLinks = classroomLinks;
+                localStorage.setItem("allFinishedInfo", JSON.stringify(allFinishedInfo));
                 classroomLinks = classroomLinks.filter(link => !link.includes("#") && link !== "");
                 await processRawData(classroomLinks);
             });
@@ -445,41 +463,4 @@
         element.click();
         document.body.removeChild(element);
     }
-
-    /* 實驗性功能：按住 Ctrl + 滑鼠，便可以將懸浮訊息小視窗任意移動到目前視窗的各位置 */
-    // 初始化變數來追蹤拖動
-    let isDragging = false;
-    let offsetX, offsetY;
-
-    // 取得圓圈元素
-    circle = document.querySelector('.floating-message-window-shrinked');
-
-    // 滑鼠按下事件
-    circle.onmousedown = function (e) {
-        if (!e.ctrlKey) return;
-        isDragging = true;
-        preCircleLeft = circle.getBoundingClientRect().left;
-        preCircleTop = circle.getBoundingClientRect().top;
-        offsetX = e.clientX - preCircleLeft;
-        offsetY = e.clientY - preCircleTop;
-        circle.classList.add("dragging");
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    };
-
-    // 滑鼠移動事件
-    function onMouseMove(e) {
-        if (!isDragging) return;
-        circle.style.left = e.clientX - offsetX + 'px';
-        circle.style.top = e.clientY - offsetY + 'px';
-    }
-
-    // 滑鼠放開事件
-    function onMouseUp() {
-        isDragging = false;
-        circle.classList.remove("dragging");
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-    }
-    /* 實驗性功能結尾 */
 })();
