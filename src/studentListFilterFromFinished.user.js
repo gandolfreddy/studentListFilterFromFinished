@@ -110,6 +110,34 @@
         currentData: "顯示目前抓取的名單",
     }
 
+    // 年級
+    const GRADE = {
+        "一年級": 1,
+        "小一": 1,
+        "二年級": 2,
+        "小二": 2,
+        "三年級": 3,
+        "小三": 3,
+        "四年級": 4,
+        "小四": 4,
+        "五年級": 5,
+        "小五": 5,
+        "六年級": 6,
+        "小六": 6,
+        "七年級": 7,
+        "國一": 7,
+        "八年級": 8,
+        "國二": 8,
+        "九年級": 9,
+        "國三": 9,
+        "十年級": 10,
+        "高一": 10,
+        "十一年級": 11,
+        "高二": 11,
+        "十二年級": 12,
+        "高三": 12,
+    };
+
     // 設定根連結
     const ROOTLINK = "https://corp.orangeapple.co";
 
@@ -233,6 +261,25 @@
         showStudentList(allFinishedInfo.rawData);
     }
 
+    // 年級顏色調整函式
+    function gradeColorAdjustment(grade) {
+        /* 
+        年級顏色調整 
+        功能： 
+        1. 依照年級調整顏色。
+        */
+        let l = GRADE[grade];
+        let tag = '';
+        if (l <= 6) {
+            tag = `<span class="badge bg-primary">${grade}</span>`;
+        } else if (l <= 9) {
+            tag = `<span class="badge bg-warning">${grade}</span>`;
+        } else {
+            tag = `<span class="badge bg-danger">${grade}</span>`;
+        }
+        return tag;
+    }
+
     // 學生名單顯示函式
     function showStudentList(chosenStudentList) {
         /* 
@@ -255,41 +302,24 @@
                 document.querySelector("#studentList").innerHTML += `
                 <div class="card">
                     <div class="card-header text-bg-primary">
-                        <h4 class="card-title"><a href='${classroom.classroomURL}' target="_blank">${classroom.classroomName}</a></h4>
+                        <h4 class="card-title">${studentName}</h4>
                     </div>
-                    <div class="card-body" style="width: 100%">
-                        <h4 class="card-title"><span class="badge bg-warning">${studentName}</span></h4>
-                        <div class="card-text">
-                            <div class="row">
-                                <div class="col-6">
-                                    <div class="card-text">
-                                        <div class="row">
-                                            <div class="col-6">學生頁面</div>
-                                            <div class="col-6"><a href='${tr.userPageURL}' target="_blank">${tr.userPageURL}</a></div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-6">年級</div>
-                                            <div class="col-6">${tr.grade}</div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-6">家長姓名</div>
-                                            <div class="col-6">${tr.parentName}</div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-6">家長頁面</div>
-                                            <div class="col-6"><a href='${tr.parentPageURL}' target="_blank">${tr.parentPageURL}</a></div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-6">課程</div>
-                                            <div class="col-6">${tr.course}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            <h5 class="card-title">年級</h5>
+                            <h4 class="card-subtitle mb-3">${gradeColorAdjustment(tr.grade)}</h4>
+                        </p>
+                        <p class="card-text">
+                            <h5 class="card-title">課程名稱</h5>
+                            <h4 class="card-subtitle mb-2"><span class="badge bg-dark">${tr.course}</span></h4>
+                        </p>
+                        <a href="${tr.userPageURL}" target="_blank" class="card-link">學生個人頁面</a>
+                        <span> | </span>
+                        <a href="${tr.parentPageURL}" target="_blank" class="card-link">家長 - ${tr.parentName}</a>
+                        <span> | </span>
+                        <a href="${classroom.classroomURL}" title="${classroom.classroomName}" target="_blank" class="card-link">原教室頁面</a>
                     </div>
-                </div>
-                `;
+                </div>`;
             }
 
         }
