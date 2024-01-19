@@ -150,6 +150,9 @@
         rawData: []
     };
 
+    // 目前畫面上選擇的資料
+    let chosenStudentList = [];
+
     // 加入懸浮訊息小視窗，並加入點擊事件，點選後會展開小視窗，並顯示學生名單
     let isExtended = false,
         isUpdating = false;
@@ -271,11 +274,13 @@
         let l = GRADE[grade];
         let tag = '';
         if (l <= 6) {
-            tag = `<span class="badge bg-primary">${grade}</span>`;
+            tag = `<span class="badge bg-success">${grade}</span>`;
         } else if (l <= 9) {
             tag = `<span class="badge bg-warning">${grade}</span>`;
-        } else {
+        } else if (l <= 12) {
             tag = `<span class="badge bg-danger">${grade}</span>`;
+        } else {
+            tag = `<span class="badge bg-primary">${grade}</span>`;
         }
         return tag;
     }
@@ -310,12 +315,12 @@
                             <h4 class="card-subtitle mb-3">${gradeColorAdjustment(tr.grade)}</h4>
                         </p>
                         <p class="card-text">
-                            <h5 class="card-title">課程名稱</h5>
+                            <h5 class="card-title">名單上課程名稱</h5>
                             <h4 class="card-subtitle mb-2"><span class="badge bg-dark">${tr.course}</span></h4>
                         </p>
-                        <a href="${tr.userPageURL}" target="_blank" class="card-link">學生個人頁面</a>
+                        <a href="${tr.userPageURL}" target="_blank" class="card-link">個人頁面</a>
                         <span> | </span>
-                        <a href="${tr.parentPageURL}" target="_blank" class="card-link">家長 - ${tr.parentName}</a>
+                        <a href="${tr.parentPageURL}" title="${tr.parentName}" target="_blank" class="card-link">家長頁面</a>
                         <span> | </span>
                         <a href="${classroom.classroomURL}" title="${classroom.classroomName}" target="_blank" class="card-link">原教室頁面</a>
                     </div>
@@ -323,6 +328,70 @@
             }
 
         }
+    }
+
+    // 根據年級選單，顯示對應的學生名單
+    function adjustWithGrade(eVal) {
+        /* 
+        根據年級選單，顯示對應的學生名單
+        功能： 
+        1. 根據年級選單，顯示對應的學生名單。
+        */
+        let chosenStudentList = [];
+        if (eVal === "all") {
+            return allFinishedInfo.rawData;
+        }
+        for (let classroom of allFinishedInfo.rawData) {
+            let innerObj = {
+                classroomName: classroom.classroomName,
+                classroomURL: classroom.classroomURL,
+                students: {},
+            }
+            for (let [studentName, info] of Object.entries(classroom.students)) {
+                if (eVal === "elementary") {
+                    if (GRADE[info.grade] <= 6) {
+                        innerObj.students[studentName] = info;
+                    }
+                } else if (eVal === "junior-high") {
+                    if (GRADE[info.grade] <= 9 && GRADE[info.grade] >= 7) {
+                        innerObj.students[studentName] = info;
+                    }
+                } else if (eVal === "senior-high") {
+                    if (GRADE[info.grade] >= 10 && GRADE[info.grade] <= 12) {
+                        innerObj.students[studentName] = info;
+                    }
+                }
+            }
+            chosenStudentList.push(innerObj);
+        }
+        return chosenStudentList;
+    }
+
+    // 根據課程選單，顯示對應的學生名單
+    function adjustWithCourse(eVal) {
+        /* 
+        根據課程選單，顯示對應的學生名單
+        功能： 
+        1. 根據課程選單，顯示對應的學生名單。
+        */
+        let chosenStudentList = [];
+        if (eVal === "all") {
+            return allFinishedInfo.rawData;
+        }
+        for (let classroom of allFinishedInfo.rawData) {
+            let innerObj = {
+                classroomName: classroom.classroomName,
+                classroomURL: classroom.classroomURL,
+                students: {},
+            }
+            for (let [studentName, info] of Object.entries(classroom.students)) {
+                if (info.course.includes(eVal)) {
+                    innerObj.students[studentName] = info;
+                }
+            }
+            chosenStudentList.push(innerObj);
+        }
+        return chosenStudentList;
     }
 
     // 加入懸浮訊息小視窗 
@@ -367,8 +436,27 @@
         </div>
         <div class="d-flex justify-content-between align-items-center pt-2 pb-3" style="width: 100%;">
             <div>
-                <button id="updateRawData" class='btn btn-outline-dark mr-1' title="${TITLEHINT.updateRawData}">${TITLEHINT.updateRawData}</button>
+                <button id="updateRawData" class='btn btn-outline-dark' title="${TITLEHINT.updateRawData}">更新學生名單</button>
                 <button id="currentData" class='btn btn-success' title="${TITLEHINT.currentData}">${TITLEHINT.currentData}</button>
+            </div>
+            <div class="d-flex justify-content-between align-items-center my-2">
+                <select class="form-select mr-1" name="grades" id="grades-select">
+                    <option value="all">全部年級</option>
+                    <option value="elementary">國小</option>
+                    <option value="junior-high">國中</option>
+                    <option value="senior-high">高中</option>
+                </select>
+                <select class="form-select" name="courses" id="courses-select">
+                    <option value="all">全部課程</option>
+                    <option value="Scratch實戰班">SB</option>
+                    <option value="Scratch菁英班">SA</option>
+                    <option value="Python">PY</option>
+                    <option value="JavaScript">JS</option>
+                    <option value="HTML5">HTML5</option>
+                    <option value="網路與資料庫">DB</option>
+                    <option value="演算法">ALGO</option>
+                    <option value="AI">AI</option>
+                </select>
             </div>
             <button id="downloadData" class='btn btn-outline-dark' title="下載目前選擇的學生資料"><i class="fa-solid fa-download"></i></button>
         </div>
@@ -387,26 +475,37 @@
         document.querySelector("#currentData")
             .addEventListener("click", showStudentList.bind(null, allFinishedInfo.rawData), false);
 
+        // TODO: 目前無法使用年級與課程同時過濾的功能，需再修正
+        // 年級選單點擊事件
+        document.querySelector("#grades-select")
+            .addEventListener("change", (e) => {
+                document.querySelector("#courses-select").value = "all";
+                chosenStudentList = adjustWithGrade(e.target.value);
+                showStudentList(chosenStudentList);
+            });
+
+        // TODO: 目前無法使用年級與課程同時過濾的功能，需再修正
+        // 課程選單點擊事件
+        document.querySelector("#courses-select")
+            .addEventListener("change", (e) => {
+                document.querySelector("#grades-select").value = "all";
+                chosenStudentList = adjustWithCourse(e.target.value);
+                showStudentList(chosenStudentList);
+            });
+
         // 下載資料按鈕點擊事件
         document.querySelector("#downloadData")
             .addEventListener("click", () => {
-                let chosenStudentList = allFinishedInfo.rawData, fileName = 'FinishedStudentList';
+                let fileName = 'FinishedStudentList';
                 let code = '';
-                // for (let classroom of chosenStudentList) {
-                //     code += `${classroom.classroomName} - ${classroom.classroomURL} \n`;
-                //     for (let student of classroom.students) {
-                //         if (student.forInternalMsg === '' && student.forTeacherMsg === '') continue;
-                //         code += `\t${student.studentName} `;
-                //         if (student.forInternalMsg !== '') {
-                //             code += ` - 內部訊息：「${student.forInternalMsg}」`;
-                //         }
-                //         if (student.forTeacherMsg !== '') {
-                //             code += ` - 給老師訊息：「${student.forTeacherMsg}」`;
-                //         }
-                //         code += '\n';
-                //     }
-                //     code += '\n';
-                // }
+                for (let classroom of chosenStudentList) {
+                    code += `${classroom.classroomName} - ${classroom.classroomURL} \n`;
+                    for (let [studentName, info] of Object.entries(classroom.students)) {
+                        code += `${studentName} - ${info.userPageURL} - ${info.grade} - ${info.parentName} - ${info.parentPageURL} - ${info.course}`;
+                        code += '\n';
+                    }
+                    code += '\n';
+                }
                 downloadSourceCode(code, `${fileName}_內部訊息_${new Date().toLocaleDateString()}.txt`);
             });
 
